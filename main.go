@@ -1,134 +1,137 @@
 package main
 
 import (
-	"os"
-
+	"fmt"
+	"github.com/veandco/go-sdl2/img"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-type KeyPressType string
-
-const(
-	KeyPressSurfaceDefault KeyPressType = "KEY_PRESS_SURFACE_DEFAULT"
-	KeyPressSurfaceEnter                = "KEY_PRESS_SURFACE_ENTER"
-	KeyPressSurfaceUp                   = "KEY_PRESS_SURFACE_UP"
-	KeyPressSurfaceDown                 = "KEY_PRESS_SURFACE_DOWN"
-	KeyPressSurfaceLeft                 = "KEY_PRESS_SURFACE_LEFT"
-	KeyPressSurfaceRight                = "KEY_PRESS_SURFACE_RIGHT"
-)
-
 var window *sdl.Window
-var gScreenSurface *sdl.Surface
-var gCurrentSurface *sdl.Surface
-var gKeyPressSurfaces map[KeyPressType]*sdl.Surface
+var renderer *sdl.Renderer
+var texture *sdl.Texture
 
-func loadSurface(path string) (*sdl.Surface, error) {
-	var optimizedSurface *sdl.Surface
+const ScreenWidth = 800
+const ScreenHeight = 600
 
-	loadedSurface, err := sdl.LoadBMP(path)
-	if err != nil {
+func loadMedia() (err error) {
+	if texture, err = loadTexture("assets/texture.png"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func destroy() (err error) {
+	if err = texture.Destroy(); err != nil {
+		return err
+	}
+	texture = nil
+	if err = renderer.Destroy(); err != nil {
+		return err
+	}
+	renderer = nil
+	if err = window.Destroy(); err != nil {
+		return err
+	}
+
+	img.Quit()
+	sdl.Quit()
+	return nil
+}
+
+func loadTexture(path string) (newTexture *sdl.Texture, err error) {
+	var loadedSurface *sdl.Surface
+	if loadedSurface, err = img.Load(path); err != nil {
 		return nil, err
 	}
 
-	optimizedSurface, err = loadedSurface.Convert(gScreenSurface.Format, 0)
-	if err != nil {
+	if newTexture, err = renderer.CreateTextureFromSurface(loadedSurface); err != nil {
 		return nil, err
 	}
 
 	loadedSurface.Free()
 
-	return optimizedSurface, nil
-}
-
-func loadMedia() (err error) {
-	gKeyPressSurfaces = make(map[KeyPressType]*sdl.Surface)
-
-	gKeyPressSurfaces[KeyPressSurfaceDefault], err = loadSurface("assets/press.bmp")
-	if err != nil {
-		return err
-	}
-
-	gKeyPressSurfaces[KeyPressSurfaceEnter], err = loadSurface("assets/hello_world.bmp")
-	if err != nil {
-		return err
-	}
-
-	gKeyPressSurfaces[KeyPressSurfaceUp], err = loadSurface("assets/up.bmp")
-	if err != nil {
-		return err
-	}
-
-	gKeyPressSurfaces[KeyPressSurfaceDown], err = loadSurface("assets/down.bmp")
-	if err != nil {
-		return err
-	}
-
-	gKeyPressSurfaces[KeyPressSurfaceLeft], err = loadSurface("assets/left.bmp")
-	if err != nil {
-		return err
-	}
-
-	gKeyPressSurfaces[KeyPressSurfaceRight], err = loadSurface("assets/right.bmp")
-	if err != nil {
-		return err
-	}
-
-	return
+	return newTexture, nil
 }
 
 func run() (err error) {
 	if err = sdl.Init(sdl.INIT_EVERYTHING); err != nil {
-		return
+		return err
 	}
 	defer sdl.Quit()
 
-	window, err = sdl.CreateWindow("Input", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, 800, 600, sdl.WINDOW_SHOWN)
-	if err != nil {
-		return
+	if window, err = sdl.CreateWindow("Input",
+		sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
+		ScreenWidth, ScreenHeight, sdl.WINDOW_SHOWN); err != nil {
+		return err
 	}
 	defer window.Destroy()
 
-	gScreenSurface, err = window.GetSurface()
-	if err != nil {
-		return
+	if renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED); err != nil {
+		return err
+	}
+
+	imgFlags := img.INIT_PNG
+	if err = img.Init(imgFlags); err != nil {
+		return err
 	}
 
 	if err = loadMedia(); err != nil {
 		return
 	}
 
-	gCurrentSurface = gKeyPressSurfaces[KeyPressSurfaceDefault]
-
 	running := true
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch e := event.(type) {
+			switch event.(type) {
 			case *sdl.QuitEvent:
 				running = false
-			case *sdl.KeyboardEvent:
-				switch e.Keysym.Sym {
-					case sdl.K_RETURN:
-						gCurrentSurface = gKeyPressSurfaces[KeyPressSurfaceEnter]
-					case sdl.K_LEFT:
-						gCurrentSurface = gKeyPressSurfaces[KeyPressSurfaceLeft]
-					case sdl.K_RIGHT:
-						gCurrentSurface = gKeyPressSurfaces[KeyPressSurfaceRight]
-					case sdl.K_UP:
-						gCurrentSurface = gKeyPressSurfaces[KeyPressSurfaceUp]
-					case sdl.K_DOWN:
-						gCurrentSurface = gKeyPressSurfaces[KeyPressSurfaceDown]
-					case sdl.K_ESCAPE:
-						gCurrentSurface = gKeyPressSurfaces[KeyPressSurfaceDefault]
-				}
 			}
 		}
 
-		if err = gCurrentSurface.BlitScaled(nil, gScreenSurface, nil); err != nil {
-			return
+		if err = renderer.SetDrawColor(168, 235, 254, 255); err != nil {
+			return err
 		}
-		if err = window.UpdateSurface(); err != nil {
-			return
+		if err = renderer.Clear(); err != nil {
+			return err
 		}
+
+		var fillRect = sdl.Rect{X: ScreenWidth / 4, Y: ScreenHeight / 4, W: ScreenWidth / 2, H: ScreenHeight / 2}
+		if err = renderer.SetDrawColor(87, 187, 254, 255); err != nil {
+			return err
+		}
+		if err = renderer.FillRect(&fillRect); err != nil {
+			return err
+		}
+
+		var outlineRect = sdl.Rect{X: ScreenWidth / 6, Y: ScreenHeight / 6, W: ScreenWidth * 2 / 3, H: ScreenHeight * 2 / 3}
+		if err = renderer.SetDrawColor(255, 255, 255, 255); err != nil {
+			return err
+		}
+		if err = renderer.DrawRect(&outlineRect); err != nil {
+			return err
+		}
+
+		if err = renderer.SetDrawColor(255, 0, 0, 255); err != nil {
+			return err
+		}
+		if err = renderer.DrawLine(0, ScreenHeight/2, ScreenWidth, ScreenHeight/2); err != nil {
+			return err
+		}
+
+		if err = renderer.SetDrawColor(255, 255, 0, 255); err != nil {
+			return err
+		}
+		for i := 0; i < ScreenHeight; i += 4 {
+			if err = renderer.DrawPoint(ScreenWidth/2, int32(i)); err != nil {
+				return err
+			}
+		}
+
+		if err = renderer.Copy(texture, nil, &fillRect); err != nil {
+			return err
+		}
+		renderer.Present()
 	}
 
 	return
@@ -136,6 +139,9 @@ func run() (err error) {
 
 func main() {
 	if err := run(); err != nil {
-		os.Exit(1)
+		fmt.Printf("Error: %s\n", err)
+	}
+	if err := destroy(); err != nil {
+		fmt.Printf("Error: %s\n", err)
 	}
 }
